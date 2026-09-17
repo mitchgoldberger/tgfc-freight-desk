@@ -224,6 +224,41 @@ def change_password_screen(u, forced=False):
 
 
 # ----------------------------------------------------------------------------- pages
+def freight_desk_emails() -> list[str]:
+    rows = db.fetchall("SELECT email FROM users WHERE active=%s AND role IN ('freight','admin') ORDER BY role, email", (True,))
+    return [r["email"] for r in rows]
+
+
+def notify_text(r) -> tuple[str, str]:
+    subject = f"Freight rate request {r['ref']}: {r['origin']} → {r['dest']} · {fmt_n(r['pallets'])} plt / {fmt_n(r['lbs'])} lb {r['temp']}"
+    lines = [
+        f"New freight rate request in the Freight Desk app — {r['ref']}", "",
+        f"Pick up:      {r['origin']}",
+        f"Deliver to:   {r['dest']}",
+        f"Load:         {fmt_n(r['pallets'])} plt / {fmt_n(r['lbs'])} lb, {str(r['temp']).capitalize()}, {r['truck']}",
+        f"Pick-up date: {fmt_d(r['ship_date'])}" + (f"   Deliver by: {fmt_d(r['deliver_by'])}" if r.get('deliver_by') else ""),
+    ]
+    if r.get("product"):
+        lines.append(f"Product:      {r['product']}")
+    if r.get("customer"):
+        lines.append(f"Customer:     {r['customer']}")
+    if r.get("po"):
+        lines.append(f"PO:           {r['po']}")
+    if r.get("notes"):
+        lines.append(f"Notes:        {r['notes']}")
+    lines += ["", "Open the queue: https://tgfc-freight-desk.streamlit.app"]
+    return subject, "\n".join(lines)
+
+
+def notify_button(r, label="✉ Notify freight desk", key=None):
+    """A mailto button to the freight desk (freight + admin users) pre-filled with the request."""
+    to = freight_desk_emails()
+    if not to:
+        return
+    subject, body = notify_text(r)
+    st.link_button(label, mailto(",".join(to), subject, body), help="Opens a pre-written email to " + ", ".join(to))
+
+
 def header(u):
     role = {"sales": "Sales", "freight": "Freight desk", "admin": "Admin"}[u["role"]]
     st.markdown(
@@ -236,6 +271,19 @@ def header(u):
 def page_new_request(u):
     st.subheader("Request a freight rate")
     st.caption("Fill this in and the freight desk sees it in the queue immediately. They send the RFQ to carriers and post the price back on this request.")
+    just = st.session_state.get("just_submitted")
+    if just:
+        r = db.fetchone("SELECT * FROM requests WHERE ref=%s", (just,))
+        if r:
+            with st.container(border=True):
+                st.success(f"Sent — reference **{just}**. It's in the freight desk's queue now.")
+                c1, c2, _ = st.columns([1.6, 1, 3])
+                with c1:
+                    notify_button(r, key="notify_new")
+                if c2.button("Done", key="dismiss_new"):
+                    st.session_state.pop("just_submitted", None)
+                    st.rerun()
+                st.caption("Optional: the button opens a ready-made email to the freight desk so they see it right away.")
     with st.form("new_request", clear_on_submit=True):
         c1, c2 = st.columns(2)
         origin = c1.text_input("Pick-up location", placeholder="Shipper — City, ST")
@@ -276,7 +324,8 @@ def page_new_request(u):
                 (ref, u["id"], origin.strip(), dest.strip(), int(pallets), int(lbs), ship, deliver, temp.lower(),
                  "FTL" if truck.startswith("Full") else "LTL", product.strip(), customer.strip(), po.strip(), notes.strip()),
             )
-            st.success(f"Sent to the freight desk — reference {ref}. You'll see the price on the Queue page.")
+            st.session_state["just_submitted"] = ref
+            st.rerun()
 
 
 def rfq_text(r, reply_by: str, msg: str, sender: str) -> tuple[str, str]:
@@ -557,6 +606,7 @@ def page_queue(u):
                     step_rfq(r, u)
                 else:
                     st.markdown('<div class="small">Waiting for the freight desk to send the RFQ.</div>', unsafe_allow_html=True)
+                    notify_button(r, label="✉ Nudge freight desk", key=f"nudge{r['id']}")
             elif r["status"] == "rfq_sent":
                 rfq_summary(r)
                 if is_freight:
