@@ -311,12 +311,6 @@ def page_new_request(u):
                 missing.append("pallets")
             if lbs <= 0:
                 missing.append("pounds")
-            if not product.strip():
-                missing.append("product")
-            if not customer.strip():
-                missing.append("customer")
-            if not po.strip():
-                missing.append("PO / reference")
             if deliver and deliver < ship:
                 st.error("Deliver-by date is before the pick-up date.")
                 return
