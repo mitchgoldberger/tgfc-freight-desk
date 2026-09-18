@@ -297,9 +297,9 @@ def page_new_request(u):
         temp = c1.radio("Temperature", ["Frozen", "Refrigerated", "Dry"], horizontal=True)
         truck = c2.radio("Truck", ["Full truckload", "LTL / partial"], horizontal=True)
         c1, c2, c3 = st.columns(3)
-        product = c1.text_input("Product (optional)", placeholder="e.g. Chicken leg quarters, 40 lb cs")
-        customer = c2.text_input("Customer (optional)", placeholder="Account name")
-        po = c3.text_input("PO / reference (optional)")
+        product = c1.text_input("Product", placeholder="e.g. Chicken leg quarters, 40 lb cs")
+        customer = c2.text_input("Customer", placeholder="Account name")
+        po = c3.text_input("PO / reference")
         notes = st.text_area("Notes for freight (optional)", placeholder="Appointment required, liftgate, pallet exchange, multi-stop, blind ship…", height=80)
         if st.form_submit_button("Send to freight desk", type="primary"):
             missing = []
@@ -311,6 +311,12 @@ def page_new_request(u):
                 missing.append("pallets")
             if lbs <= 0:
                 missing.append("pounds")
+            if not product.strip():
+                missing.append("product")
+            if not customer.strip():
+                missing.append("customer")
+            if not po.strip():
+                missing.append("PO / reference")
             if deliver and deliver < ship:
                 st.error("Deliver-by date is before the pick-up date.")
                 return
