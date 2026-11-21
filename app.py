@@ -1,6 +1,8 @@
 """TGFC Freight Desk — sales requests a rate, freight sends the RFQ, price comes back on the request."""
 from __future__ import annotations
 
+import base64
+import os
 import random
 import string
 import urllib.parse
@@ -14,6 +16,18 @@ import db
 st.set_page_config(page_title="TGFC Freight Desk", page_icon="🚚", layout="wide")
 
 # ----------------------------------------------------------------------------- styling
+def _logo_tag() -> str:
+    """The TGFC logo in white, for the navy top bar. Falls back to the text mark if the file is missing."""
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "logo_white.png")
+    try:
+        with open(path, "rb") as f:
+            b64 = base64.b64encode(f.read()).decode()
+        return f'<img class="logo" src="data:image/png;base64,{b64}" alt="Third Generation Food Company">'
+    except Exception:
+        return '<span class="mark">TGFC</span>'
+
+
+LOGO_TAG = _logo_tag()
 NAVY = "#12294A"
 NAVY2 = "#1F4E8C"
 STATUS = {
@@ -28,6 +42,7 @@ st.markdown(
 <style>
 .block-container {{ padding-top: 1.2rem; max-width: 1150px; }}
 .fd-top {{ background:{NAVY}; color:#fff; border-radius:10px; padding:12px 18px; display:flex; align-items:center; gap:14px; margin-bottom:14px; }}
+.fd-top .logo {{ height:46px; width:auto; display:block; }}
 .fd-top .mark {{ background:#fff; color:{NAVY}; font-weight:800; font-size:11px; border-radius:7px; padding:8px 7px; letter-spacing:.02em; }}
 .fd-top h1 {{ font-size:18px; margin:0; color:#fff; font-weight:600; }}
 .fd-top small {{ display:block; font-size:12px; opacity:.75; }}
@@ -181,7 +196,7 @@ def current_user():
 
 def login_screen():
     st.markdown(
-        f'<div class="fd-top"><span class="mark">TGFC</span><div><h1>Freight Desk</h1><small>Sales request → carrier RFQ → price back</small></div></div>',
+        f'<div class="fd-top">{LOGO_TAG}<div><h1>Freight Desk</h1><small>Sales request → carrier RFQ → price back</small></div></div>',
         unsafe_allow_html=True,
     )
     if not db.fetchone("SELECT id FROM users LIMIT 1"):
@@ -262,7 +277,7 @@ def notify_button(r, label="✉ Notify freight desk", key=None):
 def header(u):
     role = {"sales": "Sales", "freight": "Freight desk", "admin": "Admin"}[u["role"]]
     st.markdown(
-        f'<div class="fd-top"><span class="mark">TGFC</span><div><h1>Freight Desk</h1><small>Sales request → carrier RFQ → price back</small></div>'
+        f'<div class="fd-top">{LOGO_TAG}<div><h1>Freight Desk</h1><small>Sales request → carrier RFQ → price back</small></div>'
         f'<span class="who">{esc(u["name"])} · {role}</span></div>',
         unsafe_allow_html=True,
     )
