@@ -47,6 +47,9 @@ st.markdown(
 .fd-top h1 {{ font-size:18px; margin:0; color:#fff; font-weight:600; }}
 .fd-top small {{ display:block; font-size:12px; opacity:.75; }}
 .fd-top .who {{ margin-left:auto; font-size:12px; opacity:.85; }}
+.fd-top .switch {{ background:#fff; color:{NAVY} !important; text-decoration:none !important; font-size:12px; font-weight:700; border-radius:7px; padding:6px 11px; white-space:nowrap; margin-left:auto; }}
+.fd-top .switch:hover {{ background:#F3F5F8; }}
+.fd-top .who + .switch {{ margin-left:0; }}
 .badge {{ display:inline-block; font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.08em; padding:3px 9px; border-radius:999px; }}
 .ref {{ font-family: ui-monospace, Menlo, monospace; font-size:12px; color:#5B6779; letter-spacing:.04em; }}
 .lane {{ font-size:19px; font-weight:700; margin:4px 0 2px; }}
@@ -196,7 +199,7 @@ def current_user():
 
 def login_screen():
     st.markdown(
-        f'<div class="fd-top">{LOGO_TAG}<div><h1>Freight Desk</h1><small>Sales request → carrier RFQ → price back</small></div></div>',
+        f'<div class="fd-top">{LOGO_TAG}<div><h1>Freight Desk</h1><small>Sales request → carrier RFQ → price back</small></div>{SWITCH}</div>',
         unsafe_allow_html=True,
     )
     if not db.fetchone("SELECT id FROM users LIMIT 1"):
@@ -274,11 +277,15 @@ def notify_button(r, label="✉ Notify freight desk", key=None):
     st.link_button(label, mailto(",".join(to), subject, body), help="Opens a pre-written email to " + ", ".join(to))
 
 
+BUY_SELL_URL = "https://tgfc-buy-sell.streamlit.app"
+SWITCH = f'<a class="switch" href="{BUY_SELL_URL}" target="_blank" title="Open the Buy/Sell app">📋 Buy / Sell</a>'
+
+
 def header(u):
     role = {"sales": "Sales", "freight": "Freight desk", "admin": "Admin"}[u["role"]]
     st.markdown(
         f'<div class="fd-top">{LOGO_TAG}<div><h1>Freight Desk</h1><small>Sales request → carrier RFQ → price back</small></div>'
-        f'<span class="who">{esc(u["name"])} · {role}</span></div>',
+        f'<span class="who">{esc(u["name"])} · {role}</span>{SWITCH}</div>',
         unsafe_allow_html=True,
     )
 
