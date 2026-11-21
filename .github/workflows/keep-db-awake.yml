@@ -1,0 +1,35 @@
+# Keeps the free Supabase database from pausing.
+# Supabase pauses a free project after about a week with no activity,
+# and the Freight Desk then shows "Can't reach the database".
+# This runs a tiny read query twice a week so that never happens.
+#
+# One-time setup: GitHub repo -> Settings -> Secrets and variables -> Actions
+# -> New repository secret, name DATABASE_URL, value = the same Session pooler
+# string that is in the Streamlit app's secrets.
+name: Keep database awake
+
+on:
+  schedule:
+    - cron: "17 13 * * 1,4"   # Mondays and Thursdays, 13:17 UTC (about 7am Central)
+  workflow_dispatch: {}        # lets you run it by hand from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Touch the database
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "DATABASE_URL secret is not set in this repo yet." && exit 1
+          fi
+          pip install --quiet psycopg2-binary
+          python - <<'PY'
+          import os, psycopg2
+          conn = psycopg2.connect(os.environ["DATABASE_URL"], connect_timeout=20)
+          cur = conn.cursor()
+          cur.execute("SELECT COUNT(*) FROM requests")
+          print("Database is awake. Requests on file:", cur.fetchone()[0])
+          conn.close()
+          PY
