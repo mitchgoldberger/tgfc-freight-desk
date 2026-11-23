@@ -506,11 +506,8 @@ def step_bids_and_price(r, u):
             e["winner"] = e["carrier"] == use
         rates = [e["rate"] for e in entered if e["rate"] > 0]
         winner = next((e for e in entered if e["winner"]), None)
-        # price comes from the chosen bid; margin falls back to the saved value or 10%
-        buy = float(winner["rate"]) if winner and winner["rate"] else 0.0
-        mp = float(r["margin_pct"]) if r.get("margin_pct") is not None else 10.0
-        ma = float(r["margin_amt"]) if r.get("margin_amt") is not None else 0.0
-        sell = round(buy * (1 + mp / 100) + ma) if buy else 0
+        # the price to sales is exactly the chosen bid — no margin applied
+        sell = float(winner["rate"]) if winner and winner["rate"] else 0.0
         c1, c2, c3 = st.columns([1, 1.4, 3])
         if c1.button("Save bids", key=f"sb{r['id']}"):
             db.run("DELETE FROM bids WHERE request_id=%s", (r["id"],))
@@ -523,14 +520,14 @@ def step_bids_and_price(r, u):
             db.run(
                 """UPDATE requests SET status='quoted', buy_rate=%s, margin_pct=%s, margin_amt=%s, sell_rate=%s,
                    sell_carrier=%s, sell_transit=%s, sell_notes=%s, quoted_at=%s, quoted_by=%s WHERE id=%s""",
-                (buy, mp, ma, sell, winner["carrier"], winner["transit"].strip(), (r.get("sell_notes") or ""), db.now(), u["id"], r["id"]),
+                (sell, 0, 0, sell, winner["carrier"], winner["transit"].strip(), (r.get("sell_notes") or ""), db.now(), u["id"], r["id"]),
             )
             st.session_state.pop(f"revise{r['id']}", None)
             st.toast("Price posted — sales can see it now")
             st.rerun()
         if sell:
             per_lb = f" (${sell / float(r['lbs']):.3f} / lb)" if r.get("lbs") else ""
-            c3.markdown(f'<div class="small" style="padding-top:8px">Sell rate to sales <b>{money(sell)}</b>{per_lb} · buy {money(buy)} + {mp:g}%</div>', unsafe_allow_html=True)
+            c3.markdown(f'<div class="small" style="padding-top:8px">Sell rate to sales <b>{money(sell)}</b>{per_lb}</div>', unsafe_allow_html=True)
         elif rates:
             c3.markdown(f'<div class="small" style="padding-top:8px">Low bid <b>{money(min(rates))}</b> · {len(rates)} of {len(entered)} carriers have quoted · pick a carrier under "Price from" to post</div>', unsafe_allow_html=True)
 
@@ -545,7 +542,6 @@ def price_panel(r, u, can_edit: bool):
         + (f'<div class="kv">Carrier<b>{esc(r["sell_carrier"])}</b></div>' if r.get("sell_carrier") else "")
         + (f'<div class="kv">Transit<b>{esc(r["sell_transit"])}</b></div>' if r.get("sell_transit") else "")
         + f'<div class="kv">Per lb<b>{per_lb}</b></div>'
-        + (f'<div class="kv">Buy / margin<b>{money(r["buy_rate"])} · {money(float(r["sell_rate"]) - float(r["buy_rate"]))}</b></div>' if can_edit and r.get("buy_rate") else "")
         + "</div>"
         + (f'<div style="margin-top:6px">{esc(r["sell_notes"])}</div>' if r.get("sell_notes") else "")
         + f'<div class="small">Priced by {esc(user_name(r["quoted_by"]))} · {ago(r["quoted_at"])}</div>',
