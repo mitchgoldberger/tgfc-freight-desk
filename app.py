@@ -505,7 +505,13 @@ def step_bids_and_price(r, u):
         for e in entered:
             e["winner"] = e["carrier"] == use
         rates = [e["rate"] for e in entered if e["rate"] > 0]
-        c1, c2 = st.columns([1, 3])
+        winner = next((e for e in entered if e["winner"]), None)
+        # price comes from the chosen bid; margin falls back to the saved value or 10%
+        buy = float(winner["rate"]) if winner and winner["rate"] else 0.0
+        mp = float(r["margin_pct"]) if r.get("margin_pct") is not None else 10.0
+        ma = float(r["margin_amt"]) if r.get("margin_amt") is not None else 0.0
+        sell = round(buy * (1 + mp / 100) + ma) if buy else 0
+        c1, c2, c3 = st.columns([1, 1.4, 3])
         if c1.button("Save bids", key=f"sb{r['id']}"):
             db.run("DELETE FROM bids WHERE request_id=%s", (r["id"],))
             for e in entered:
@@ -513,41 +519,20 @@ def step_bids_and_price(r, u):
                        (r["id"], e["carrier"], (e["rate"] or None), e["transit"], e["notes"], e["winner"]))
             st.toast("Bids saved")
             st.rerun()
-        if rates:
-            c2.markdown(f'<div class="small" style="padding-top:8px">Low bid <b>{money(min(rates))}</b> · {len(rates)} of {len(entered)} carriers have quoted</div>', unsafe_allow_html=True)
-
-    winner = next((e for e in entered if e["winner"]), None)
-    # when the chosen bid changes, push its numbers into the pricing fields
-    wkey = f"lastwin{r['id']}"
-    wsig = (winner["carrier"], winner["rate"], winner["transit"]) if winner else None
-    if st.session_state.get(wkey) != wsig:
-        st.session_state[wkey] = wsig
-        if winner:
-            st.session_state[f"buy{r['id']}"] = float(winner["rate"] or 0)
-            st.session_state[f"sc{r['id']}"] = winner["carrier"]
-            st.session_state[f"st{r['id']}"] = winner["transit"]
-    with st.expander("3 · Price back to sales", expanded=True):
-        c1, c2, c3, c4 = st.columns(4)
-        default_buy = float(winner["rate"]) if winner and winner["rate"] else (float(r["buy_rate"]) if r.get("buy_rate") else 0.0)
-        buy = c1.number_input("Carrier buy rate ($)", min_value=0.0, step=25.0, value=default_buy, key=f"buy{r['id']}")
-        mp = c2.number_input("Margin %", min_value=0.0, step=0.5, value=float(r["margin_pct"]) if r.get("margin_pct") is not None else 10.0, key=f"mp{r['id']}")
-        ma = c3.number_input("+ flat $", min_value=0.0, step=5.0, value=float(r["margin_amt"]) if r.get("margin_amt") is not None else 0.0, key=f"ma{r['id']}")
-        sell = round(buy * (1 + mp / 100) + ma) if buy else 0
-        per_lb = f"${sell / float(r['lbs']):.3f} / lb" if sell and r.get("lbs") else ""
-        c4.markdown(f'<div class="stat"><div class="l">Sell rate to sales</div><div class="v" style="color:#1F7A4D">{money(sell) if sell else "—"}</div><div class="s">{per_lb}</div></div>', unsafe_allow_html=True)
-        c1, c2, c3 = st.columns(3)
-        carrier = c1.text_input("Carrier on the quote", value=(winner["carrier"] if winner else (r.get("sell_carrier") or "")), key=f"sc{r['id']}")
-        transit = c2.text_input("Transit", value=(winner["transit"] if winner else (r.get("sell_transit") or "")), key=f"st{r['id']}")
-        snotes = c3.text_input("Notes to sales (optional)", value=r.get("sell_notes") or "", key=f"sn{r['id']}", placeholder="Rate valid through…, fuel included, 24h appt…")
-        if st.button("Post price to sales", key=f"pp{r['id']}", type="primary", disabled=not sell):
+        if c2.button("Post price to sales", key=f"pp{r['id']}", type="primary", disabled=not sell):
             db.run(
                 """UPDATE requests SET status='quoted', buy_rate=%s, margin_pct=%s, margin_amt=%s, sell_rate=%s,
                    sell_carrier=%s, sell_transit=%s, sell_notes=%s, quoted_at=%s, quoted_by=%s WHERE id=%s""",
-                (buy, mp, ma, sell, carrier.strip(), transit.strip(), snotes.strip(), db.now(), u["id"], r["id"]),
+                (buy, mp, ma, sell, winner["carrier"], winner["transit"].strip(), (r.get("sell_notes") or ""), db.now(), u["id"], r["id"]),
             )
             st.session_state.pop(f"revise{r['id']}", None)
             st.toast("Price posted — sales can see it now")
             st.rerun()
+        if sell:
+            per_lb = f" (${sell / float(r['lbs']):.3f} / lb)" if r.get("lbs") else ""
+            c3.markdown(f'<div class="small" style="padding-top:8px">Sell rate to sales <b>{money(sell)}</b>{per_lb} · buy {money(buy)} + {mp:g}%</div>', unsafe_allow_html=True)
+        elif rates:
+            c3.markdown(f'<div class="small" style="padding-top:8px">Low bid <b>{money(min(rates))}</b> · {len(rates)} of {len(entered)} carriers have quoted · pick a carrier under "Price from" to post</div>', unsafe_allow_html=True)
 
 
 def price_panel(r, u, can_edit: bool):
